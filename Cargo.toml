@@ -1,0 +1,10 @@
+[package]
+name = "tflite-metadump"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+
+# must be in sync with the `flatc` version used to generate the Rust code
+flatbuffers = "24"
