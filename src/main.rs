@@ -3,6 +3,11 @@ use std::{env, fs, ops};
 
 use anyhow::bail;
 use metadata::tflite::{AssociatedFile, ModelMetadata, ProcessUnit, TensorMetadata};
+use object_detector::mediapipe::tasks::ObjectDetectorOptions;
+
+#[allow(warnings)]
+#[path = "../generated/object_detector_metadata_schema_generated.rs"]
+mod object_detector;
 
 #[allow(warnings)]
 #[path = "../generated/metadata_schema_generated.rs"]
@@ -103,8 +108,47 @@ fn main() -> anyhow::Result<()> {
             if let Some(custom) = sub.custom_metadata() {
                 println!("  - {} custom metadata entries", custom.len());
                 for custom in custom.iter() {
+                    let bytes = custom.data().map_or(&[][..], |v| v.bytes());
                     println!("    - name: {}", custom.name().unwrap_or("<unnamed>"));
-                    println!("      {} bytes", custom.data().map_or(0, |v| v.len()));
+                    println!("      {} bytes", bytes.len());
+
+                    match custom.name() {
+                        Some("DETECTOR_METADATA") => {
+                            if let Err(e) = decode_and_print_detector_metadata(Indent(3), bytes) {
+                                println!("      decoding error: {e}");
+                            }
+                        }
+                        _ => println!("      (unknown or unhandled format)"),
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn decode_and_print_detector_metadata(indent: Indent, bytes: &[u8]) -> anyhow::Result<()> {
+    let options = flatbuffers::root::<ObjectDetectorOptions>(bytes)?;
+    if let Some(min) = options.min_parser_version() {
+        println!("{indent}min_parser_version: {min}");
+    }
+    if let Some(dec) = options.tensors_decoding_options() {
+        println!("{indent}tensors_decoding_options: {dec:?}");
+    }
+    if let Some(ssd) = options.ssd_anchors_options() {
+        println!("{indent}ssd_anchor_options:");
+        if let Some(fixed) = ssd.fixed_anchors_schema() {
+            println!("{indent}  fixed_anchors_schema:");
+            if let Some(anchors) = fixed.anchors() {
+                // (this can contain thousands of anchors, so don't print all of them)
+                const PRINT: usize = 16;
+                println!("{indent}    {} anchors", anchors.len());
+                for anchor in anchors.iter().take(PRINT) {
+                    println!("{indent}    - {anchor:?}");
+                }
+                if anchors.len() > PRINT {
+                    println!("{indent}    - ...{} more", anchors.len() - PRINT);
                 }
             }
         }
@@ -157,21 +201,7 @@ fn print_assoc_files<'a>(indent: Indent, assoc: impl Iterator<Item = AssociatedF
 
 fn print_proc<'a>(indent: Indent, proc: impl Iterator<Item = ProcessUnit<'a>>) {
     for pu in proc {
-        if let Some(options) = pu.options_as_normalization_options() {
-            println!("{indent}- NormalizationOptions: {:?}", options);
-        } else if let Some(options) = pu.options_as_score_calibration_options() {
-            println!("{indent}- ScoreCalibrationOptions: {:?}", options);
-        } else if let Some(options) = pu.options_as_score_thresholding_options() {
-            println!("{indent}- ScoreThresholdingOptions: {:?}", options);
-        } else if let Some(options) = pu.options_as_bert_tokenizer_options() {
-            println!("{indent}- BertTokenizerOptions: {:?}", options);
-        } else if let Some(options) = pu.options_as_sentence_piece_tokenizer_options() {
-            println!("{indent}- SentencePieceTokenizerOptions: {:?}", options);
-        } else if let Some(options) = pu.options_as_regex_tokenizer_options() {
-            println!("{indent}- RegexTokenizerOptions: {:?}", options);
-        } else {
-            println!("{indent}- unknown options type: {:?}", pu.options_type());
-        }
+        println!("{indent}- {pu:?}");
     }
 }
 
