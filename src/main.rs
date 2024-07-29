@@ -142,13 +142,21 @@ fn decode_and_print_detector_metadata(indent: Indent, bytes: &[u8]) -> anyhow::R
             println!("{indent}  fixed_anchors_schema:");
             if let Some(anchors) = fixed.anchors() {
                 // (this can contain thousands of anchors, so don't print all of them)
-                const PRINT: usize = 16;
+                const PRINT: usize = 24;
                 println!("{indent}    {} anchors", anchors.len());
-                for anchor in anchors.iter().take(PRINT) {
-                    println!("{indent}    - {anchor:?}");
-                }
-                if anchors.len() > PRINT {
+                if anchors.len() <= PRINT {
+                    for anchor in anchors.iter() {
+                        println!("{indent}    - {anchor:?}");
+                    }
+                } else {
+                    for anchor in anchors.iter().take(PRINT / 2) {
+                        println!("{indent}    - {anchor:?}");
+                    }
                     println!("{indent}    - ...{} more", anchors.len() - PRINT);
+                    for i in anchors.len() - 1 - PRINT / 2..anchors.len() {
+                        let anchor = anchors.get(i);
+                        println!("{indent}    - {anchor:?}");
+                    }
                 }
             }
         }
